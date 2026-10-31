@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isTeacher() { return signedIn() && request.auth.token.teacher == true; }
+    function teacherOf(roomId) {
+      return isTeacher() &&
+        get(/databases/$(database)/documents/rooms/$(roomId)).data.teacherUid == request.auth.uid;
+    }
+    function isPlayer(roomId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/rooms/$(roomId)/players/$(request.auth.uid));
+    }
+
+    match /rooms/{roomId} {
+      // Room IDs are random six-digit codes. Signed-in users can look up a room by its exact ID.
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if isTeacher() && request.resource.data.teacherUid == request.auth.uid;
+      allow update, delete: if teacherOf(roomId);
+
+      match /players/{playerUid} {
+        allow read: if teacherOf(roomId) || isPlayer(roomId);
+        allow create: if signedIn() && request.auth.uid == playerUid
+          && get(/databases/$(database)/documents/rooms/$(roomId)).data.status == "lobby"
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 15;
+        allow update, delete: if signedIn() && request.auth.uid == playerUid
+          && get(/databases/$(database)/documents/rooms/$(roomId)).data.status == "lobby";
+      }
+
+      match /entries/{entryId} {
+        allow create: if signedIn() && isPlayer(roomId)
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.word is string
+          && request.resource.data.word.size() > 0
+          && request.resource.data.word.size() <= 30
+          && get(/databases/$(database)/documents/rooms/$(roomId)).data.status == "playing";
+        allow read: if teacherOf(roomId) || (signedIn() && resource.data.uid == request.auth.uid);
+        allow update, delete: if false;
+      }
+
+      match /results/{resultId} {
+        allow read: if teacherOf(roomId) || isPlayer(roomId);
+        allow create, update, delete: if teacherOf(roomId);
+      }
+    }
+  }
+}
