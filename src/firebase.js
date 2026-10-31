@@ -1,8 +1,6 @@
-```javascript
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import { getFunctions } from "firebase/functions";
 
 // Firebase 프로젝트 설정
 const firebaseConfig = {
@@ -15,11 +13,6 @@ const firebaseConfig = {
   measurementId: "G-JS6E7VPE92"
 };
 
-// Firebase 초기화
 const app = initializeApp(firebaseConfig);
-
-// Firebase 서비스 연결
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const functions = getFunctions(app, "asia-northeast3");
-```

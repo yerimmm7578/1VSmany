@@ -1,49 +1,62 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
-    function isTeacher() { return signedIn() && request.auth.token.teacher == true; }
-    function teacherOf(roomId) {
-      return isTeacher() &&
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function roomOwner(roomId) {
+      return signedIn() &&
         get(/databases/$(database)/documents/rooms/$(roomId)).data.teacherUid == request.auth.uid;
     }
+
     function isPlayer(roomId) {
       return signedIn() &&
         exists(/databases/$(database)/documents/rooms/$(roomId)/players/$(request.auth.uid));
     }
 
     match /rooms/{roomId} {
-      // Room IDs are random six-digit codes. Signed-in users can look up a room by its exact ID.
+      // 방 번호를 알고 있는 로그인 사용자만 방 정보를 조회할 수 있습니다.
       allow get: if signedIn();
       allow list: if false;
-      allow create: if isTeacher() && request.resource.data.teacherUid == request.auth.uid;
-      allow update, delete: if teacherOf(roomId);
+
+      // 방을 만든 계정만 해당 방을 관리할 수 있습니다.
+      allow create: if signedIn()
+        && request.resource.data.teacherUid == request.auth.uid
+        && request.resource.data.status == "lobby";
+      allow update: if roomOwner(roomId)
+        && request.resource.data.teacherUid == resource.data.teacherUid;
+      allow delete: if roomOwner(roomId);
 
       match /players/{playerUid} {
-        allow read: if teacherOf(roomId) || isPlayer(roomId);
-        allow create: if signedIn() && request.auth.uid == playerUid
+        allow read: if roomOwner(roomId) || isPlayer(roomId);
+        allow create: if signedIn()
+          && request.auth.uid == playerUid
           && get(/databases/$(database)/documents/rooms/$(roomId)).data.status == "lobby"
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 15;
-        allow update, delete: if signedIn() && request.auth.uid == playerUid
+        allow update, delete: if signedIn()
+          && request.auth.uid == playerUid
           && get(/databases/$(database)/documents/rooms/$(roomId)).data.status == "lobby";
       }
 
       match /entries/{entryId} {
-        allow create: if signedIn() && isPlayer(roomId)
+        allow create: if signedIn()
+          && isPlayer(roomId)
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.word is string
           && request.resource.data.word.size() > 0
           && request.resource.data.word.size() <= 30
           && get(/databases/$(database)/documents/rooms/$(roomId)).data.status == "playing";
-        allow read: if teacherOf(roomId) || (signedIn() && resource.data.uid == request.auth.uid);
+        allow read: if roomOwner(roomId)
+          || (signedIn() && resource.data.uid == request.auth.uid);
         allow update, delete: if false;
       }
 
       match /results/{resultId} {
-        allow read: if teacherOf(roomId) || isPlayer(roomId);
-        allow create, update, delete: if teacherOf(roomId);
+        allow read: if roomOwner(roomId) || isPlayer(roomId);
+        allow create, update, delete: if roomOwner(roomId);
       }
     }
   }

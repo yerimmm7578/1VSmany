@@ -4,10 +4,9 @@ import {
   serverTimestamp, setDoc, updateDoc, where
 } from "firebase/firestore";
 import {
-  onAuthStateChanged, signInAnonymously, signInWithCustomToken
+  onAuthStateChanged, signInAnonymously
 } from "firebase/auth";
-import { httpsCallable } from "firebase/functions";
-import { auth, db, functions } from "./firebase";
+import { auth, db } from "./firebase";
 
 const CONSONANTS = ["ㄱ","ㄴ","ㄷ","ㄹ","ㅁ","ㅂ","ㅅ","ㅇ","ㅈ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
 const INITIALS = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
@@ -80,9 +79,10 @@ export default function App() {
   async function teacherLogin() {
     setBusy(true); setError("");
     try {
-      const call = httpsCallable(functions, "teacherLogin");
-      const response = await call({ pin });
-      await signInWithCustomToken(auth, response.data.token);
+      // 간편 학급용 모드: PIN은 화면에서만 확인합니다.
+      // 교사 권한의 데이터 수정은 Firestore에서 방 생성자의 UID로 제한합니다.
+      if (pin !== "3313") throw new Error("교사 비밀번호가 올바르지 않습니다.");
+      await ensureAnonymous();
       setRole("teacher");
       setScreen("teacherHome");
     } catch (e) { setError(e.message || "교사 인증에 실패했습니다."); }
